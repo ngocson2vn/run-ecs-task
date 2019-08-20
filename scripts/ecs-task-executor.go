@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/FiNCDeveloper/ecs-task-executor/libs/ecs"
+	"github.com/ngocson2vn/ecs-task-executor/libs/ecs"
 )
 
 var logger *zap.Logger
@@ -80,7 +80,7 @@ func main() {
 
     sigs := make(chan os.Signal, 1)
     done := make(chan bool, 1)
-    signal.Notify(sigs, syscall.SIGINT, syscall.SIGTERM)
+    signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 
 	env, err := getRequiredEnv()
 	handleError(err)

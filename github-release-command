@@ -1,0 +1,15 @@
+#!/bin/bash
+
+if [ ! "$1" ]; then
+  echo "Please input a tag"
+  echo "Example: $0 v0.0.1"
+  exit 1
+fi
+
+github-release upload \
+  --owner ngocson2vn \
+  --repo $(basename `pwd`) \
+  --tag "$1" \
+  --name "$1" \
+  --body "New release for Linux OS" \
+  bin/$(basename `pwd`)

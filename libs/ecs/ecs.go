@@ -10,8 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/FiNCDeveloper/ecs-task-executor/libs/util"
-	"github.com/FiNCDeveloper/ecs-task-executor/libs/cloudwatch"
+	"github.com/ngocson2vn/ecs-task-executor/libs/util"
+	"github.com/ngocson2vn/ecs-task-executor/libs/cloudwatch"
 )
 
 type Task struct {
@@ -71,6 +71,17 @@ func DescribeTask(ecsSvc *ecs.ECS, clusterName string, taskId string) (*ecs.Task
 		return nil, err
 	}
 
+	retry := 0
+	for output != nil && len(output.Tasks) == 0 && retry <= RETRY_MAX {
+		time.Sleep(time.Duration(1) * time.Second)
+		retry++
+
+		output, err = ecsSvc.DescribeTasks(input)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	if len(output.Tasks) > 0 {
 		return output.Tasks[0], nil
 	}
@@ -92,7 +103,9 @@ func RunTask(task *Task) error {
 	}
 
 	task.Id = taskIDs[0]
+	task.Logger.Info(fmt.Sprintf("Successfully placed task: %s", task.Id))
 
+	time.Sleep(time.Duration(3) * time.Second)
 	err = traceTask(ecsSvc, taskIDs[0], task)
 	if err != nil {
 		return err
