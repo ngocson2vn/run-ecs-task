@@ -78,9 +78,9 @@ func getRequiredEnv() (RequiredEnv, error) {
 func main() {
 	logger, _ = zap.NewDevelopment()
 
-    sigs := make(chan os.Signal, 1)
-    done := make(chan bool, 1)
-    signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
+	sigs := make(chan os.Signal, 1)
+	done := make(chan bool, 1)
+	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
 
 	env, err := getRequiredEnv()
 	handleError(err)
@@ -102,26 +102,26 @@ func main() {
 	}
 
 	// Handle cancellation
-    go func(task *ecs.Task) {
-	    <-sigs
+	go func(task *ecs.Task) {
+		<-sigs
 
-	    if len(task.Id) == 0 {
+		if len(task.Id) == 0 {
 			time.Sleep(time.Duration(30) * time.Second)
 		}
 
-	    if task.Status != ecs.TASK_STATUS_STOPPED {
-	        err := ecs.StopTask(task)
-	        handleError(err)
-	        logger.Info(fmt.Sprintf("Sent SIGTERM to task %s", task.Id))
-	    }
+		if task.Status != ecs.TASK_STATUS_STOPPED {
+			err := ecs.StopTask(task)
+			handleError(err)
+			logger.Info(fmt.Sprintf("Sent SIGTERM to task %s", task.Id))
+		}
 
-	    done <- true
+		done <- true
 	}(task)
 
 
 	err = ecs.RunTask(task)
 	handleError(err)
 
-    syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
-    <-done
+	syscall.Kill(syscall.Getpid(), syscall.SIGTERM)
+	<-done
 }
