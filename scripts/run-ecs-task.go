@@ -11,7 +11,7 @@ import (
 
 	"go.uber.org/zap"
 
-	"github.com/ngocson2vn/ecs-task-executor/libs/ecs"
+	"github.com/ngocson2vn/run-ecs-task/libs/ecs"
 )
 
 var logger *zap.Logger

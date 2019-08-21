@@ -10,8 +10,8 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/ngocson2vn/ecs-task-executor/libs/util"
-	"github.com/ngocson2vn/ecs-task-executor/libs/cloudwatch"
+	"github.com/ngocson2vn/run-ecs-task/libs/util"
+	"github.com/ngocson2vn/run-ecs-task/libs/cloudwatch"
 )
 
 type Task struct {
