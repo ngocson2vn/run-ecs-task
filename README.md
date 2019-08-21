@@ -1,5 +1,5 @@
-# batch_submitter
-A program for executing an ECS Task remotely.
+# run-ecs-task
+A tool for running an ECS Task and outputting its logs.
 
 ## Architecture Diagram
-![image](https://user-images.githubusercontent.com/1695690/63317171-bf8b0280-c34c-11e9-8cf1-d5916f4d1dea.png)
+![image](https://user-images.githubusercontent.com/1695690/63397153-9e85e880-c404-11e9-8c89-c9bdf704c881.png)
