@@ -298,7 +298,7 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 	// Get task container's ExitCode
 	for _, c := range ecsTask.Containers {
 		if *c.Name == task.ContainerName {
-			if *c.ExitCode != 0 {
+			if c.ExitCode != nil && *c.ExitCode != 0 {
 				return fmt.Errorf("Task failed with ExitCode = %d", *c.ExitCode)
 			}
 
