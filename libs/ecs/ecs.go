@@ -143,13 +143,75 @@ func StopTask(task *Task) error {
 	return nil
 }
 
+func UpdateTaskDefinitionWithNewImage(taskName string, containerName string, newImage string) error {
+	sess, err := session.NewSession()
+	if err != nil {
+		return err
+	}
+	ecsSvc := ecs.New(sess, &aws.Config{Region: aws.String(util.GetEnv("AWS_REGION", "ap-northeast-1"))})
+
+	// Get Current TaskDefinition
+	taskParams := &ecs.DescribeTaskDefinitionInput{
+		TaskDefinition: aws.String(taskName),
+	}
+	taskDef, err := ecsSvc.DescribeTaskDefinition(taskParams)
+	if err != nil {
+		return err
+	}
+
+	for _, container := range taskDef.TaskDefinition.ContainerDefinitions {
+		if *container.Name == containerName {
+			*container.Image = newImage
+		}
+	}
+
+	newTaskDefInput := &ecs.RegisterTaskDefinitionInput{
+		ContainerDefinitions:    taskDef.TaskDefinition.ContainerDefinitions,
+		Cpu:                     taskDef.TaskDefinition.Cpu,
+		ExecutionRoleArn:        taskDef.TaskDefinition.ExecutionRoleArn,
+		Family:                  taskDef.TaskDefinition.Family,
+		Memory:                  taskDef.TaskDefinition.Memory,
+		NetworkMode:             taskDef.TaskDefinition.NetworkMode,
+		PlacementConstraints:    taskDef.TaskDefinition.PlacementConstraints,
+		RequiresCompatibilities: taskDef.TaskDefinition.RequiresCompatibilities,
+		TaskRoleArn:             taskDef.TaskDefinition.TaskRoleArn,
+		Volumes:                 taskDef.TaskDefinition.Volumes,
+	}
+
+	_, err = ecsSvc.RegisterTaskDefinition(newTaskDefInput)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 
 func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error) {
+	//////////////////////////////////////////////////////////////////////////////
+	// 1. Update the batch task definition with the latest docker image
+	//////////////////////////////////////////////////////////////////////////////
 	sourceContainerDef, err := GetContainerDefinition(task.SourceTaskDefinition, task.ContainerName)
 	if err != nil {
 		return []string{}, err
 	}
 
+	targetContainerDef, err := GetContainerDefinition(task.TargetTaskDefinition, task.ContainerName)
+	if err != nil {
+		return []string{}, err
+	}
+
+	if *sourceContainerDef.Image != *targetContainerDef.Image {
+		err = UpdateTaskDefinitionWithNewImage(task.TargetTaskDefinition, task.ContainerName, *sourceContainerDef.Image)
+		if err != nil {
+			return []string{}, err
+		}
+	}
+	task.Logger.Info(fmt.Sprintf("Latest docker image: %s", *sourceContainerDef.Image))
+
+
+	//////////////////////////////////////////////////////////////////////////////
+	// 2. Overrides Command and Environment and then runs batch
+	//////////////////////////////////////////////////////////////////////////////
 	cmd := []*string{}
 	for _, c := range task.Command {
 		cmd = append(cmd, aws.String(c))
