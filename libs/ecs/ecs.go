@@ -32,7 +32,7 @@ const (
 	RETRY_MAX int = 3
 )
 
-func GetContainerDefinition(taskName string, containerName string) (*ecs.ContainerDefinition, error) {
+func GetTaskDefinition(taskName string) (*ecs.TaskDefinition, error) {
 	sess, err := session.NewSession()
 	if err != nil {
 		return nil, err
@@ -48,13 +48,7 @@ func GetContainerDefinition(taskName string, containerName string) (*ecs.Contain
 		return nil, err
 	}
 
-	for _, container := range taskDef.TaskDefinition.ContainerDefinitions {
-		if *container.Name == containerName {
-			return container, nil
-		}
-	}
-
-	return nil, fmt.Errorf("Could not find container %s in task definition %s", containerName, taskName)
+	return taskDef.TaskDefinition, nil
 }
 
 
@@ -143,75 +137,126 @@ func StopTask(task *Task) error {
 	return nil
 }
 
-func UpdateTaskDefinitionWithNewImage(taskName string, containerName string, newImage string) error {
+func registerTargetTaskDefinition(targetTaskDef *ecs.TaskDefinition, sourceContainerDef *ecs.ContainerDefinition, containerName string) (*ecs.TaskDefinition, error) {
 	sess, err := session.NewSession()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	ecsSvc := ecs.New(sess, &aws.Config{Region: aws.String(util.GetEnv("AWS_REGION", "ap-northeast-1"))})
 
-	// Get Current TaskDefinition
-	taskParams := &ecs.DescribeTaskDefinitionInput{
-		TaskDefinition: aws.String(taskName),
-	}
-	taskDef, err := ecsSvc.DescribeTaskDefinition(taskParams)
-	if err != nil {
-		return err
-	}
-
-	for _, container := range taskDef.TaskDefinition.ContainerDefinitions {
+	for _, container := range targetTaskDef.ContainerDefinitions {
 		if *container.Name == containerName {
-			*container.Image = newImage
+			container.Image = sourceContainerDef.Image
+			container.Environment = sourceContainerDef.Environment
 		}
 	}
 
 	newTaskDefInput := &ecs.RegisterTaskDefinitionInput{
-		ContainerDefinitions:    taskDef.TaskDefinition.ContainerDefinitions,
-		Cpu:                     taskDef.TaskDefinition.Cpu,
-		ExecutionRoleArn:        taskDef.TaskDefinition.ExecutionRoleArn,
-		Family:                  taskDef.TaskDefinition.Family,
-		Memory:                  taskDef.TaskDefinition.Memory,
-		NetworkMode:             taskDef.TaskDefinition.NetworkMode,
-		PlacementConstraints:    taskDef.TaskDefinition.PlacementConstraints,
-		RequiresCompatibilities: taskDef.TaskDefinition.RequiresCompatibilities,
-		TaskRoleArn:             taskDef.TaskDefinition.TaskRoleArn,
-		Volumes:                 taskDef.TaskDefinition.Volumes,
+		ContainerDefinitions:    targetTaskDef.ContainerDefinitions,
+		Cpu:                     targetTaskDef.Cpu,
+		ExecutionRoleArn:        targetTaskDef.ExecutionRoleArn,
+		Family:                  targetTaskDef.Family,
+		Memory:                  targetTaskDef.Memory,
+		NetworkMode:             targetTaskDef.NetworkMode,
+		PlacementConstraints:    targetTaskDef.PlacementConstraints,
+		RequiresCompatibilities: targetTaskDef.RequiresCompatibilities,
+		TaskRoleArn:             targetTaskDef.TaskRoleArn,
+		Volumes:                 targetTaskDef.Volumes,
 	}
 
-	_, err = ecsSvc.RegisterTaskDefinition(newTaskDefInput)
+	output, err := ecsSvc.RegisterTaskDefinition(newTaskDefInput)
+	if err != nil {
+		return nil, err
+	}
+
+	return output.TaskDefinition, nil
+}
+
+func containerDefinitionChanged(sourceContainerDef *ecs.ContainerDefinition, targetContainerDef *ecs.ContainerDefinition) bool {
+	// Compare docker image name
+	if *sourceContainerDef.Image != *targetContainerDef.Image {
+		return true
+	}
+
+	// Compare environment variables
+	sourceEnv := map[string]string{}
+	targetEnv := map[string]string{}
+	for _, env := range sourceContainerDef.Environment {
+		sourceEnv[*env.Name] = *env.Value
+	}
+
+	for _, env := range targetContainerDef.Environment {
+		targetEnv[*env.Name] = *env.Value
+	}
+
+	if len(sourceEnv) != len(targetEnv) {
+		return true
+	}
+
+	for sk, sv := range sourceEnv {
+		if tv, ok := targetEnv[sk]; ok {
+			if tv != sv {
+				return true
+			}
+		} else {
+			return true
+		}
+	}
+
+	return false
+}
+
+func updateTargetTaskDefinition(task *Task) error {
+	sourceTaskDef, err := GetTaskDefinition(task.SourceTaskDefinition)
 	if err != nil {
 		return err
+	}
+
+	targetTaskDef, err := GetTaskDefinition(task.TargetTaskDefinition)
+	if err != nil {
+		return err
+	}
+
+	var sourceContainerDef *ecs.ContainerDefinition = nil
+	var targetContainerDef *ecs.ContainerDefinition = nil
+	for _, container := range sourceTaskDef.ContainerDefinitions {
+		if *container.Name == task.ContainerName {
+			sourceContainerDef = container
+			break
+		}
+	}
+	if sourceContainerDef == nil {
+		return fmt.Errorf("Could not find the source container %s", task.ContainerName)
+	}
+
+	for _, container := range targetTaskDef.ContainerDefinitions {
+		if *container.Name == task.ContainerName {
+			targetContainerDef = container
+			break
+		}
+	}
+	if targetContainerDef == nil {
+		return fmt.Errorf("Could not find the target container %s", task.ContainerName)
+	}
+
+	if containerDefinitionChanged(sourceContainerDef, targetContainerDef) {
+		latestTargetTaskDef, err := registerTargetTaskDefinition(targetTaskDef, sourceContainerDef, task.ContainerName)
+		if err != nil {
+			return err
+		}
+		task.Logger.Info(fmt.Sprintf("Latest task definition: %s", *latestTargetTaskDef.TaskDefinitionArn))
 	}
 
 	return nil
 }
 
+
 func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error) {
-	//////////////////////////////////////////////////////////////////////////////
-	// 1. Update the batch task definition with the latest docker image
-	//////////////////////////////////////////////////////////////////////////////
-	sourceContainerDef, err := GetContainerDefinition(task.SourceTaskDefinition, task.ContainerName)
+	err := updateTargetTaskDefinition(task)
 	if err != nil {
 		return []string{}, err
 	}
 
-	targetContainerDef, err := GetContainerDefinition(task.TargetTaskDefinition, task.ContainerName)
-	if err != nil {
-		return []string{}, err
-	}
-
-	if *sourceContainerDef.Image != *targetContainerDef.Image {
-		err = UpdateTaskDefinitionWithNewImage(task.TargetTaskDefinition, task.ContainerName, *sourceContainerDef.Image)
-		if err != nil {
-			return []string{}, err
-		}
-	}
-	task.Logger.Info(fmt.Sprintf("Latest docker image: %s", *sourceContainerDef.Image))
-
-
-	//////////////////////////////////////////////////////////////////////////////
-	// 2. Overrides Command and Environment and then runs batch
-	//////////////////////////////////////////////////////////////////////////////
 	cmd := []*string{}
 	for _, c := range task.Command {
 		cmd = append(cmd, aws.String(c))
@@ -219,8 +264,7 @@ func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error
 
 	containerOverride := &ecs.ContainerOverride{
 		Command: cmd,
-		Environment: sourceContainerDef.Environment,
-		Name: sourceContainerDef.Name,
+		Name: aws.String(task.ContainerName),
 	}
 
 	taskOverride := &ecs.TaskOverride{
