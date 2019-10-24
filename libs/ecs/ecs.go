@@ -305,10 +305,6 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 			if nextToken != nil {
 				nextTokenValue = *nextToken
 
-				// if len(messages) > 0 {
-				// 	logger.Info(fmt.Sprintf("==> Next Token: %s", nextTokenValue))
-				// }
-
 				if nextTokenValue == prevTokenValue {
 					nextTokenValue = ""
 				}
@@ -336,20 +332,15 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 	// Task Status: STOPPED
 	//=======================================
 	prevTokenValue = ""
-	nextTokenValue = ""
-	messages, nextToken := cloudwatch.GetLogEvents(logGroupName, logStreamName, nextTokenValue)
-	if nextToken != nil {
-		nextTokenValue = *nextToken
-	}
 
 	for prevTokenValue != nextTokenValue {
+		prevTokenValue = nextTokenValue
+
+		messages, nextToken := cloudwatch.GetLogEvents(logGroupName, logStreamName, nextTokenValue)
 		for _, m := range messages {
 			logger.Info(*m)
 		}
 
-		prevTokenValue = nextTokenValue
-
-		messages, nextToken = cloudwatch.GetLogEvents(logGroupName, logStreamName, nextTokenValue)
 		if nextToken != nil {
 			nextTokenValue = *nextToken
 		}
