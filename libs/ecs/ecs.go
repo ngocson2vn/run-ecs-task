@@ -2,34 +2,34 @@ package ecs
 
 import (
 	"fmt"
-	"time"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/ecs"
-	"github.com/ngocson2vn/run-ecs-task/libs/util"
 	"github.com/ngocson2vn/run-ecs-task/libs/cloudwatch"
+	"github.com/ngocson2vn/run-ecs-task/libs/util"
 )
 
 type Task struct {
-	Id                    string
-	SourceTaskDefinition  string
-	TargetTaskDefinition  string
-	ClusterName           string
-	ContainerName         string
-	LaunchType            string
-	Status                string
-	Command               []string
-	Logger                *zap.Logger
+	Id                   string
+	SourceTaskDefinition string
+	TargetTaskDefinition string
+	ClusterName          string
+	ContainerName        string
+	LaunchType           string
+	Status               string
+	Command              []string
+	Logger               *zap.Logger
 }
 
 const (
 	TASK_STATUS_RUNNING string = "RUNNING"
 	TASK_STATUS_STOPPED string = "STOPPED"
-	RETRY_MAX int = 3
+	RETRY_MAX           int    = 3
 )
 
 func GetTaskDefinition(taskName string) (*ecs.TaskDefinition, error) {
@@ -50,7 +50,6 @@ func GetTaskDefinition(taskName string) (*ecs.TaskDefinition, error) {
 
 	return taskDef.TaskDefinition, nil
 }
-
 
 func DescribeTask(ecsSvc *ecs.ECS, clusterName string, taskId string) (*ecs.Task, error) {
 	input := &ecs.DescribeTasksInput{
@@ -83,7 +82,6 @@ func DescribeTask(ecsSvc *ecs.ECS, clusterName string, taskId string) (*ecs.Task
 	return nil, fmt.Errorf("Could not find the task: %s", taskId)
 }
 
-
 func RunTask(task *Task) error {
 	sess, err := session.NewSession()
 	if err != nil {
@@ -108,7 +106,6 @@ func RunTask(task *Task) error {
 	return nil
 }
 
-
 func StopTask(task *Task) error {
 	sess, err := session.NewSession()
 	if err != nil {
@@ -118,7 +115,7 @@ func StopTask(task *Task) error {
 
 	input := &ecs.StopTaskInput{
 		Cluster: aws.String(task.ClusterName),
-		Task: aws.String(task.Id),
+		Task:    aws.String(task.Id),
 	}
 
 	retry := 0
@@ -250,7 +247,6 @@ func updateTargetTaskDefinition(task *Task) error {
 	return nil
 }
 
-
 func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error) {
 	err := updateTargetTaskDefinition(task)
 	if err != nil {
@@ -264,7 +260,7 @@ func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error
 
 	containerOverride := &ecs.ContainerOverride{
 		Command: cmd,
-		Name: aws.String(task.ContainerName),
+		Name:    aws.String(task.ContainerName),
 	}
 
 	taskOverride := &ecs.TaskOverride{
@@ -272,10 +268,10 @@ func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error
 	}
 
 	runTaskInput := &ecs.RunTaskInput{
-		Cluster: aws.String(task.ClusterName),
-		Count: aws.Int64(desiredCount),
-		LaunchType: aws.String(task.LaunchType),
-		Overrides: taskOverride,
+		Cluster:        aws.String(task.ClusterName),
+		Count:          aws.Int64(desiredCount),
+		LaunchType:     aws.String(task.LaunchType),
+		Overrides:      taskOverride,
 		TaskDefinition: aws.String(task.TargetTaskDefinition),
 	}
 
@@ -296,7 +292,6 @@ func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error
 
 	return taskIDs, nil
 }
-
 
 func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 	logger := task.Logger
@@ -322,7 +317,6 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 		task.Status = *ecsTask.LastStatus
 	}
 
-
 	// Fetch logs from CloudWatch Logs
 	logGroupName := fmt.Sprintf("/ecs/%s", task.TargetTaskDefinition)
 	logStreamName := fmt.Sprintf("ecs/%s/%s", task.ContainerName, taskId)
@@ -332,7 +326,6 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 	prevTokenValue := ""
 	nextTokenValue := ""
 	isFirstRound := true
-
 
 	//=======================================
 	// Task Status: RUNNING
@@ -370,11 +363,20 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 		}
 	}
 
-
-
 	//=======================================
 	// Task Status: STOPPED
 	//=======================================
+	if len(nextTokenValue) == 0 {
+		messages, nextToken := cloudwatch.GetLogEvents(logGroupName, logStreamName, nextTokenValue)
+		for _, m := range messages {
+			logger.Info(*m)
+		}
+
+		if nextToken != nil {
+			nextTokenValue = *nextToken
+		}
+	}
+
 	prevTokenValue = ""
 
 	for prevTokenValue != nextTokenValue {
@@ -402,6 +404,9 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 			break
 		}
 	}
+
+	region := util.GetEnv("AWS_REGION", "ap-northeast-1")
+	logger.Info(fmt.Sprintf("CloudWatchLogs: https://%s.console.aws.amazon.com/cloudwatch/home?region=%s#logEventViewer:group=%s;stream=%s", region, region, logGroupName, logStreamName))
 
 	return nil
 }

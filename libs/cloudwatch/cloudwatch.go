@@ -23,6 +23,7 @@ func GetLogEvents(logGroupName string, logStreamName string, nextToken string) (
 	input := &cloudwatchlogs.GetLogEventsInput{
 		LogGroupName:  aws.String(logGroupName),
 		LogStreamName: aws.String(logStreamName),
+		StartFromHead: aws.Bool(true),
 		NextToken:     token,
 	}
 
