@@ -393,6 +393,8 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 	}
 
 	logger.Info(fmt.Sprintf("Task Status: %s", *ecsTask.LastStatus))
+	region := util.GetEnv("AWS_REGION", "ap-northeast-1")
+	logger.Info(fmt.Sprintf("CloudWatchLogs: https://%s.console.aws.amazon.com/cloudwatch/home?region=%s#logEventViewer:group=%s;stream=%s", region, region, logGroupName, logStreamName))
 
 	// Get task container's ExitCode
 	for _, c := range ecsTask.Containers {
@@ -404,9 +406,6 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 			break
 		}
 	}
-
-	region := util.GetEnv("AWS_REGION", "ap-northeast-1")
-	logger.Info(fmt.Sprintf("CloudWatchLogs: https://%s.console.aws.amazon.com/cloudwatch/home?region=%s#logEventViewer:group=%s;stream=%s", region, region, logGroupName, logStreamName))
 
 	return nil
 }
