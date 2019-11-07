@@ -59,20 +59,29 @@ func DescribeTask(ecsSvc *ecs.ECS, clusterName string, taskId string) (*ecs.Task
 		},
 	}
 
+	retry := 0
 	output, err := ecsSvc.DescribeTasks(input)
+	for err != nil && retry <= RETRY_MAX {
+		time.Sleep(time.Duration(1) * time.Second)
+		retry++
+
+		output, err = ecsSvc.DescribeTasks(input)
+	}
+
 	if err != nil {
 		return nil, err
 	}
 
-	retry := 0
+	retry = 0
 	for output != nil && len(output.Tasks) == 0 && retry <= RETRY_MAX {
 		time.Sleep(time.Duration(1) * time.Second)
 		retry++
 
 		output, err = ecsSvc.DescribeTasks(input)
-		if err != nil {
-			return nil, err
-		}
+	}
+
+	if err != nil {
+		return nil, err
 	}
 
 	if len(output.Tasks) > 0 {
