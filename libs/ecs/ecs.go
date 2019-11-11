@@ -44,6 +44,15 @@ func GetTaskDefinition(taskName string) (*ecs.TaskDefinition, error) {
 		TaskDefinition: aws.String(taskName),
 	}
 	taskDef, err := svcEcs.DescribeTaskDefinition(taskParams)
+
+	retry := 0
+	for err != nil && retry <= RETRY_MAX {
+		time.Sleep(time.Duration(1) * time.Second)
+		retry++
+
+		taskDef, err = svcEcs.DescribeTaskDefinition(taskParams)
+	}
+
 	if err != nil {
 		return nil, err
 	}
