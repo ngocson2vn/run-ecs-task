@@ -29,7 +29,7 @@ type Task struct {
 const (
 	TASK_STATUS_RUNNING string = "RUNNING"
 	TASK_STATUS_STOPPED string = "STOPPED"
-	RETRY_MAX           int    = 3
+	RETRY_MAX           int    = 10
 )
 
 func GetTaskDefinition(taskName string) (*ecs.TaskDefinition, error) {
