@@ -293,14 +293,18 @@ func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error
 		TaskDefinition: aws.String(task.TargetTaskDefinition),
 	}
 
+	retry := 0
 	output, err := ecsSvc.RunTask(runTaskInput)
-	if err != nil {
-		errMsg := err.Error()
-		for _, failure := range output.Failures {
-			errMsg = fmt.Sprintf("%s\n%s\n%s", errMsg, failure.Arn, failure.Reason)
-		}
 
-		return []string{}, fmt.Errorf(errMsg)
+	for (err != nil || len(output.Tasks) == 0) && retry <= RETRY_MAX {
+		time.Sleep(time.Duration(1) * time.Second)
+		retry++
+
+		output, err = ecsSvc.RunTask(runTaskInput)
+	}
+
+	if err != nil {
+		return []string{}, err
 	}
 
 	taskIDs := []string{}
