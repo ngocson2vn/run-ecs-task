@@ -2,10 +2,9 @@ package ecs
 
 import (
 	"fmt"
+	"log"
 	"strings"
 	"time"
-
-	"go.uber.org/zap"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -23,7 +22,6 @@ type Task struct {
 	LaunchType           string
 	Status               string
 	Command              []string
-	Logger               *zap.Logger
 }
 
 const (
@@ -113,7 +111,7 @@ func RunTask(task *Task) error {
 	}
 
 	task.Id = taskIDs[0]
-	task.Logger.Info(fmt.Sprintf("Successfully placed task: %s", task.Id))
+	log.Println(fmt.Sprintf("Successfully placed task: %s", task.Id))
 
 	time.Sleep(time.Duration(3) * time.Second)
 	err = traceTask(ecsSvc, taskIDs[0], task)
@@ -259,7 +257,7 @@ func updateTargetTaskDefinition(task *Task) error {
 		if err != nil {
 			return err
 		}
-		task.Logger.Info(fmt.Sprintf("Latest task definition: %s", *latestTargetTaskDef.TaskDefinitionArn))
+		log.Println(fmt.Sprintf("Latest task definition: %s", *latestTargetTaskDef.TaskDefinitionArn))
 	}
 
 	return nil
@@ -316,8 +314,6 @@ func placeTask(ecsSvc *ecs.ECS, task *Task, desiredCount int64) ([]string, error
 }
 
 func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
-	logger := task.Logger
-
 	ecsTask, err := DescribeTask(ecsSvc, task.ClusterName, taskId)
 	if err != nil {
 		return err
@@ -342,8 +338,8 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 	// Fetch logs from CloudWatch Logs
 	logGroupName := fmt.Sprintf("/ecs/%s", task.TargetTaskDefinition)
 	logStreamName := fmt.Sprintf("ecs/%s/%s", task.ContainerName, taskId)
-	logger.Info(fmt.Sprintf("LogGroupName: %s", logGroupName))
-	logger.Info(fmt.Sprintf("LogStreamName: %s", logStreamName))
+	log.Println(fmt.Sprintf("LogGroupName: %s", logGroupName))
+	log.Println(fmt.Sprintf("LogStreamName: %s", logStreamName))
 
 	prevTokenValue := ""
 	nextTokenValue := ""
@@ -353,12 +349,12 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 	// Task Status: RUNNING
 	//=======================================
 	if *ecsTask.LastStatus == TASK_STATUS_RUNNING {
-		logger.Info(fmt.Sprintf("Task Status: %s", *ecsTask.LastStatus))
+		log.Println(fmt.Sprintf("Task Status: %s", *ecsTask.LastStatus))
 
 		for *ecsTask.LastStatus == TASK_STATUS_RUNNING {
 			messages, nextToken := cloudwatch.GetLogEvents(logGroupName, logStreamName, nextTokenValue)
 			for _, m := range messages {
-				logger.Info(*m)
+				log.Println(*m)
 			}
 
 			if nextToken != nil {
@@ -391,7 +387,7 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 	if len(nextTokenValue) == 0 {
 		messages, nextToken := cloudwatch.GetLogEvents(logGroupName, logStreamName, nextTokenValue)
 		for _, m := range messages {
-			logger.Info(*m)
+			log.Println(*m)
 		}
 
 		if nextToken != nil {
@@ -406,7 +402,7 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 
 		messages, nextToken := cloudwatch.GetLogEvents(logGroupName, logStreamName, nextTokenValue)
 		for _, m := range messages {
-			logger.Info(*m)
+			log.Println(*m)
 		}
 
 		if nextToken != nil {
@@ -414,9 +410,9 @@ func traceTask(ecsSvc *ecs.ECS, taskId string, task *Task) error {
 		}
 	}
 
-	logger.Info(fmt.Sprintf("Task Status: %s", *ecsTask.LastStatus))
+	log.Println(fmt.Sprintf("Task Status: %s", *ecsTask.LastStatus))
 	region := util.GetEnv("AWS_REGION", "ap-northeast-1")
-	logger.Info(fmt.Sprintf("CloudWatchLogs: https://%s.console.aws.amazon.com/cloudwatch/home?region=%s#logEventViewer:group=%s;stream=%s", region, region, logGroupName, logStreamName))
+	log.Println(fmt.Sprintf("CloudWatchLogs: https://%s.console.aws.amazon.com/cloudwatch/home?region=%s#logEventViewer:group=%s;stream=%s", region, region, logGroupName, logStreamName))
 
 	// Get task container's ExitCode
 	for _, c := range ecsTask.Containers {

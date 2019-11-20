@@ -3,18 +3,15 @@ package main
 import (
 	"fmt"
 	"flag"
+	"log"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/ngocson2vn/run-ecs-task/libs/ecs"
 )
-
-var logger *zap.Logger
 
 type RequiredEnv struct {
 	SourceTaskDefinition           string
@@ -26,8 +23,7 @@ type RequiredEnv struct {
 
 func handleError(err error) {
 	if err != nil {
-		logger.Error(err.Error())
-		os.Exit(1)
+		log.Fatalln(err.Error())
 	}
 }
 
@@ -76,8 +72,6 @@ func getRequiredEnv() (RequiredEnv, error) {
 
 
 func main() {
-	logger, _ = zap.NewDevelopment()
-
 	sigs := make(chan os.Signal, 1)
 	done := make(chan bool, 1)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM)
@@ -98,7 +92,6 @@ func main() {
 		ContainerName:         env.ContainerName,
 		LaunchType:            env.LaunchType,
 		Command:               []string{"sh", "-l", "-c", *command},
-		Logger:                logger,
 	}
 
 	// Handle cancellation
@@ -112,7 +105,7 @@ func main() {
 		if task.Status != ecs.TASK_STATUS_STOPPED {
 			err := ecs.StopTask(task)
 			handleError(err)
-			logger.Info(fmt.Sprintf("Sent SIGTERM to task %s", task.Id))
+			log.Println(fmt.Sprintf("Sent SIGTERM to task %s", task.Id))
 		}
 
 		done <- true
