@@ -252,7 +252,13 @@ func updateTargetTaskDefinition(task *Task) error {
 		return fmt.Errorf("Could not find the target container %s", task.ContainerName)
 	}
 
-	if containerDefinitionChanged(sourceContainerDef, targetContainerDef) {
+	shouldUpdateTaskDef := false
+	if *targetTaskDef.TaskRoleArn != *sourceTaskDef.TaskRoleArn {
+		targetTaskDef.TaskRoleArn = sourceTaskDef.TaskRoleArn
+		shouldUpdateTaskDef = true
+	}
+
+	if shouldUpdateTaskDef || containerDefinitionChanged(sourceContainerDef, targetContainerDef) {
 		latestTargetTaskDef, err := registerTargetTaskDefinition(targetTaskDef, sourceContainerDef, task.ContainerName)
 		if err != nil {
 			return err
