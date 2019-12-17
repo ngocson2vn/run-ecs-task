@@ -3,6 +3,7 @@ package ecs
 import (
 	"fmt"
 	"log"
+	"reflect"
 	"strings"
 	"time"
 
@@ -161,6 +162,7 @@ func registerTargetTaskDefinition(targetTaskDef *ecs.TaskDefinition, sourceConta
 		if *container.Name == containerName {
 			container.Image = sourceContainerDef.Image
 			container.Environment = sourceContainerDef.Environment
+			container.Secrets = sourceContainerDef.Secrets
 		}
 	}
 
@@ -202,21 +204,17 @@ func containerDefinitionChanged(sourceContainerDef *ecs.ContainerDefinition, tar
 		targetEnv[*env.Name] = *env.Value
 	}
 
-	if len(sourceEnv) != len(targetEnv) {
-		return true
+	sourceSecrets := map[string]string{}
+	targetSecrets := map[string]string{}
+	for _, secret := range sourceContainerDef.Secrets {
+		sourceSecrets[*secret.Name] = *secret.ValueFrom
 	}
 
-	for sk, sv := range sourceEnv {
-		if tv, ok := targetEnv[sk]; ok {
-			if tv != sv {
-				return true
-			}
-		} else {
-			return true
-		}
+	for _, secret := range targetContainerDef.Secrets {
+		targetSecrets[*secret.Name] = *secret.ValueFrom
 	}
 
-	return false
+	return !reflect.DeepEqual(sourceEnv, targetEnv) || !reflect.DeepEqual(sourceSecrets, targetSecrets)
 }
 
 func updateTargetTaskDefinition(task *Task) error {
@@ -255,6 +253,11 @@ func updateTargetTaskDefinition(task *Task) error {
 	shouldUpdateTaskDef := false
 	if *targetTaskDef.TaskRoleArn != *sourceTaskDef.TaskRoleArn {
 		targetTaskDef.TaskRoleArn = sourceTaskDef.TaskRoleArn
+		shouldUpdateTaskDef = true
+	}
+
+	if *targetTaskDef.ExecutionRoleArn != *sourceTaskDef.ExecutionRoleArn {
+		targetTaskDef.ExecutionRoleArn = sourceTaskDef.ExecutionRoleArn
 		shouldUpdateTaskDef = true
 	}
 
