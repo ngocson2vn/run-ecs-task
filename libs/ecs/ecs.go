@@ -251,12 +251,12 @@ func updateTargetTaskDefinition(task *Task) error {
 	}
 
 	shouldUpdateTaskDef := false
-	if *targetTaskDef.TaskRoleArn != *sourceTaskDef.TaskRoleArn {
+	if !reflect.DeepEqual(sourceTaskDef.TaskRoleArn, targetTaskDef.TaskRoleArn) {
 		targetTaskDef.TaskRoleArn = sourceTaskDef.TaskRoleArn
 		shouldUpdateTaskDef = true
 	}
 
-	if *targetTaskDef.ExecutionRoleArn != *sourceTaskDef.ExecutionRoleArn {
+	if !reflect.DeepEqual(sourceTaskDef.ExecutionRoleArn, targetTaskDef.ExecutionRoleArn) {
 		targetTaskDef.ExecutionRoleArn = sourceTaskDef.ExecutionRoleArn
 		shouldUpdateTaskDef = true
 	}
