@@ -214,7 +214,7 @@ func containerDefinitionChanged(sourceContainerDef *ecs.ContainerDefinition, tar
 		targetSecrets[*secret.Name] = *secret.ValueFrom
 	}
 
-	return reflect.DeepEqual(sourceEnv, targetEnv) && reflect.DeepEqual(sourceSecrets, targetSecrets)
+	return !reflect.DeepEqual(sourceEnv, targetEnv) || !reflect.DeepEqual(sourceSecrets, targetSecrets)
 }
 
 func updateTargetTaskDefinition(task *Task) error {
