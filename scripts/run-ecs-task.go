@@ -1,8 +1,8 @@
 package main
 
 import (
-	"fmt"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -14,11 +14,11 @@ import (
 )
 
 type RequiredEnv struct {
-	SourceTaskDefinition           string
-	TargetTaskDefinition           string
-	ClusterName                    string
-	ContainerName                  string
-	LaunchType                     string
+	SourceTaskDefinition string
+	TargetTaskDefinition string
+	ClusterName          string
+	ContainerName        string
+	LaunchType           string
 }
 
 func handleError(err error) {
@@ -30,9 +30,9 @@ func handleError(err error) {
 func getRequiredEnv() (RequiredEnv, error) {
 	sourceTaskDefinition := os.Getenv("SOURCE_TASK_DEFINITION")
 	targetTaskDefinition := os.Getenv("TARGET_TASK_DEFINITION")
-	clusterName          := os.Getenv("CLUSTER_NAME")
-	containerName        := os.Getenv("CONTAINER_NAME")
-	launchType           := os.Getenv("LAUNCH_TYPE")
+	clusterName := os.Getenv("CLUSTER_NAME")
+	containerName := os.Getenv("CONTAINER_NAME")
+	launchType := os.Getenv("LAUNCH_TYPE")
 
 	errMessages := []string{}
 	if len(sourceTaskDefinition) == 0 {
@@ -70,7 +70,6 @@ func getRequiredEnv() (RequiredEnv, error) {
 	return requiredEnv, nil
 }
 
-
 func main() {
 	log.Println("Version 0.0.12")
 	sigs := make(chan os.Signal, 1)
@@ -81,18 +80,26 @@ func main() {
 	handleError(err)
 
 	command := flag.String("command", "", "Command to be executed")
+	passCommandDirectly := flag.Bool("pass_command_directly", false, "true when run command without ls -lc")
 	flag.Parse()
 	if command == nil || len(*command) == 0 {
 		handleError(fmt.Errorf("Command is empty. Please specify a command with --command option."))
 	}
 
-	task := &ecs.Task {
-		SourceTaskDefinition:  env.SourceTaskDefinition,
-		TargetTaskDefinition:  env.TargetTaskDefinition,
-		ClusterName:           env.ClusterName,
-		ContainerName:         env.ContainerName,
-		LaunchType:            env.LaunchType,
-		Command:               []string{"sh", "-l", "-c", *command},
+	var commandForEcsTask []string
+	if *passCommandDirectly {
+		commandForEcsTask = []string{*command}
+	} else {
+		commandForEcsTask = []string{"sh", "-l", "-c", *command}
+	}
+
+	task := &ecs.Task{
+		SourceTaskDefinition: env.SourceTaskDefinition,
+		TargetTaskDefinition: env.TargetTaskDefinition,
+		ClusterName:          env.ClusterName,
+		ContainerName:        env.ContainerName,
+		LaunchType:           env.LaunchType,
+		Command:              commandForEcsTask,
 	}
 
 	// Handle cancellation
@@ -111,7 +118,6 @@ func main() {
 
 		done <- true
 	}(task)
-
 
 	err = ecs.RunTask(task)
 	handleError(err)
