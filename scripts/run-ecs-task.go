@@ -80,7 +80,7 @@ func main() {
 	handleError(err)
 
 	command := flag.String("command", "", "Command to be executed")
-	passCommandDirectly := flag.Bool("pass_command_directly", false, "true when run command without ls -lc")
+	passCommandDirectly := flag.Bool("pass-command-directly", false, "true when run command without ls -lc")
 	flag.Parse()
 	if command == nil || len(*command) == 0 {
 		handleError(fmt.Errorf("Command is empty. Please specify a command with --command option."))
